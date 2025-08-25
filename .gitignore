@@ -1,0 +1,74 @@
+# Build directories
+build/
+Build/
+BUILD/
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+
+# Compiled binaries
+*.o
+*.a
+*.so
+*.dylib
+*.exe
+
+# Generated parser files
+*.tab.cc
+*.tab.hh
+*.lex.cc
+*.output
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Test outputs
+*.out
+test_output/
+output.txt
+
+# Temporary files
+*.tmp
+*.temp
+
+# Matrix visualization test files
+matrix_demo
+simulate_tck_matrix
+simple_zone_test
+test_dbm_output
+
+# Generated model files  
+simple_fischer.tck
+fischer_*.tck
+example_model.tck
+infinite_zone_example.tck
+
+# Documentation files
+CLAUDE.md
+
+# Matrix output files
+matrix_output.txt
+
+# Log files
+*.log
+verification_*.txt
+debug_output.txt
+cli_commands.sh
+zone_matrix.txt

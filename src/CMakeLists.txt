@@ -159,6 +159,13 @@ target_link_libraries(tck-simulate libtchecker_static ${Boost_LIBRARIES})
 set_property(TARGET tck-simulate PROPERTY CXX_STANDARD 17)
 set_property(TARGET tck-simulate PROPERTY CXX_STANDARD_REQUIRED ON)
 
+# Build tck-matrix executable
+add_executable(tck-matrix
+  ${CMAKE_CURRENT_SOURCE_DIR}/tck-matrix/tck-matrix.cc)
+target_link_libraries(tck-matrix libtchecker_static ${Boost_LIBRARIES})
+set_property(TARGET tck-matrix PROPERTY CXX_STANDARD 17)
+set_property(TARGET tck-matrix PROPERTY CXX_STANDARD_REQUIRED ON)
+
 # Project view in IDEs (Xcode, etc)
 foreach(FILE ${LIBTCHECKER_SRC})
   # Get the directory of the source file
@@ -179,7 +186,7 @@ foreach(FILE ${LIBTCHECKER_SRC})
 endforeach()
 
 # Install rule for binaries, lib and header files
-install(TARGETS tck-liveness tck-reach tck-simulate tck-syntax libtchecker_static
+install(TARGETS tck-liveness tck-reach tck-simulate tck-syntax tck-matrix libtchecker_static
   RUNTIME DESTINATION bin
   ARCHIVE DESTINATION lib)
 
