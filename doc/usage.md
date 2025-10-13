@@ -1,100 +1,117 @@
-TChecker is a verification tool for timed automata and a plateform for testing new algorithms. It implements several verification algorithms that can be launched from the command line. This document describes how to invoke the algorithms using the command line tool.
+# TChecker Commands Usage
 
-Simply launching the command line tool:
-
-```
-tchecker
-```
-
-lists all available algorithms, for instance:
+## 1. tck-syntax: 语法检查和模型转换
 
 ```
-Usage: ./src/tchecker command [options] [file]
-    with command:
-        covreach      run covering reachability algorithm
-        explore       run explore algorithm
-    options are command-specific (use -h to get help on the command)
-    reads from standard input if no file name is provided
+Usage: build/src/tck-syntax [options] [file]
+   --asynchronous-events  reports all asynchronous events in the model
+   -c                     syntax check (timed automaton)
+   -p                     synchronized product
+   -t                     transform a system into dot graphviz file format
+   -j                     transform a system into json file format
+   -o file                output file
+   -d delim               delimiter string (default: _)
+   -n name                name of synchronized process (default: P)
+   --only-processes       only output processes in dot graphviz format(combined with -t)
+   -h                     help
+reads from standard input if file is not provided
 ```
 
-Each algorithm has its own set of command line options that can be
-obtained by invoking TChecker with the corresponding algorithm, and
-option `-h`, for instance:
+Example:
 
 ```
-tchecker covreach -h
+./src/tck-syntax -c ../fisher.tck
 ```
 
-lists all available options for algorithm `covreach` (see below).
-
-
-# Invoking algorithm `covreach`
-
-Algorithm `covreach` is the classical reachability algorithm with state covering. Given a transition system S and a trace inclusion relation <= on the states of S, `covreach` explores S from its initial states. Each time a new state s is reached, the algorithm checks if it has already visited a state s' with s <= s'. If so, s is discarded and the exploration continue with a new node. If no such node s' exists, then the successors of s are expanded and all the nodes s'' <= s are removed.
-
-This algorithm terminates if S is finite. It is correct if <= is a trace inclusion relation on the states of S.
-
-The `covreach` algorithm can be invoked with the following command:
+## 2. tck-reach: 可达性分析
 
 ```
-tchecker covreach OPTIONS model.txt
+Usage: build/src/tck-reach [options] [file]
+   -a algorithm  reachability algorithm
+          reach          standard reachability algorithm over the zone graph
+          concur19       reachability algorithm over the local-time zone graph, with sync-subsumption
+          covreach       reachability algorithm over the zone graph with inclusion subsumption
+          aLU-covreach   reachability algorithm over the zone graph with aLU subsumption
+   -C type       type of certificate
+          none       no certificate (default)
+          graph      graph of explored state-space
+          symbolic   symbolic run to a state with searched labels if any
+          concrete   concrete run to a state with searched labels if any (only for reach and covreach)
+   -h            help
+   -l l1,l2,...  comma-separated list of searched labels
+   -o out_file   output file for certificate (default is standard output)
+   -s bfs|dfs    search order
+   --block-size  size of allocation blocks
+   --table-size  size of hash tables
+reads from standard input if file is not provided
 ```
 
-where OPTIONS are described below, and `model.txt` is a timed automaton model specified using the [TChecker file format](https://github.com/fredher/tchecker/wiki/TChecker-file-format).
+Example:
 
 ```
--c cover         where cover is one of the following:
-                 inclusion     zone inclusion
-                 aLUg          aLU abstraction with global clock bounds
-                 aLUl          aLU abstraction with local clock bounds
-                 aMg           aM abstraction with global clock bounds
-                 aMl           aM abstraction with local clock bounds
--f (dot|raw)     output format (graphviz DOT format or raw format)
--h               this help screen
--l labels        accepting labels, where labels is a column-separated list of identifiers
--m model         where model is one of the following:
-                 zg:semantics:extrapolation        zone graph with:
-                   semantics:      elapsed         time-elapsed semantics
-                                   non-elapsed     non time-elapsed semantics
-                   extrapolation:  NOextra         no zone extrapolation
-                                   extraMg         ExtraM with global clock bounds
-                                   extraMl         ExtraM with local clock bounds
-                                   extraM+g        ExtraM+ with global clock bounds
-                                   extraM+l        ExtraM+ with local clock bounds
-                                   extraLUg        ExtraLU with global clock bounds
-                                   extraLUl        ExtraLU with local clock bounds
-                                   extraLU+g       ExtraLU+ with global clock bounds
-                                   extraLU+l       ExtraLU+ with local clock bounds
-                 async_zg:semantics:extrapolation  asynchronous zone graph with:
-                   semantics:      elapsed         time-elapsed semantics
-                                   non-elapsed     non time-elapsed semantics
-                   extrapolation:  extraLU+l       ExtraLU+ with local clock bounds
--o filename      output graph to filename
--s (bfs|dfs)     search order (breadth-first search or depth-first search)
--S               output stats
---block-size n   size of an allocation block (number of allocated objects)
---table-size n   size of the nodes table
-
-Default parameters: -c inclusion -f raw -s dfs --block-size 10000 --table-size 65536, output to standard output
-                    -m must be specified
+./src/tck-reach -a reach -s bfs ../fisher.tck
 ```
 
-The transition system is a zone graph of the timed automaton model given to `tchecker`. It is specified using option `-m`. Many different zone graphs are available:
+## 3. tck-liveness: 活性分析
 
-- either the zone graph `zg` or the asynchronous zone graph `async_zg` (also called local-time zone graph)
+```
+Usage: build/src/tck-liveness [options] [file]
+   -a algorithm  liveness algorithm
+          couvscc    Couvreur's SCC-decomposition-based algorithm
+                     search an accepting cycle that visits all labels
+          ndfs       nested depth-first search algorithm over the zone graph
+                     search an accepting cycle with a state with all labels
+   -C type       type of certificate
+          none       no certificate (default)
+          graph      graph of explored state-space
+          symbolic   symbolic lasso run with loop on labels (not for couvscc with multiple labels)
+   -h            help
+   -l l1,l2,...  comma-separated list of accepting labels
+   -o out_file   output file for certificate (default is standard output)
+   --block-size  size of allocation blocks
+   --table-size  size of hash tables
+reads from standard input if file is not provided
+```
 
-- two semantics can be chosen for zones: `elapsed` where time-elapse is the last operation in successor computation, or `non-elapsed` where time-elapse is the first operation in successor computation
+Example:
 
-- to ensure finiteness of the zone graph, an extrapolation can be applied to the zone graph: ExtraM, ExtraM+, ExtraLU and ExtraLU+, using either local clock bounds `l` or global clock bounds `g`. The `covreach` algorithm can be invoked with no extrapolation `NOextra`, but termination is not guaranteed as the zone graph may be infinite.
+```
+./src/tck-liveness -a ndfs -l accepting ../fisher.tck
+```
 
-The trace inclusion relation <= can be chosen with option `-c`: `inclusion` is standard zone inclusion, while `aM` and `aLU` check zone inclusion w.r.t. abstractions aM and aLU, and either local clock bounds `l` or global clock bounds `g`.
+## 4. tck-simulate: 模拟执行
 
-The reachability objective is specified with option `-l labels`: the algorithm searches for a configuration (L,V,X) such that the labels in L cover the specified labels.
+```
+Usage: build/src/tck-simulate [options] [file]
+   -1          one-step simulation (output initial or next states if combined with -s)
+   -i          interactive simulation (default)
+   -r N        randomized simulation, N steps
+   -o file     output file for simulation trace (default: stdout)
+   -t          output simulation trace, incompatible with -1
+   -h          help
+reads from standard input if file is not provided
+```
 
-The order in which the zone graph is explored has a significant impact on the performance of the algorithm. It can be specified with option `-s`.
+Example:
 
-The `covreach` algorithm builds a subsumption graph that consists of all the maximal nodes w.r.t. the trace inclusion relation <=, and edges among them. The graph can be output using options `-f` to choose the format and option `-o` to choose the output file.
+```
+./src/tck-simulate -r 10 ../fisher.tck
+```
 
-Option `-S` gives access to statistics on the run of the `covreach` algorithm.
+## 5. tck-matrix: 区域矩阵可视化
 
-Finally, the performance of the algorithm can be improved with options `--block-size` and `--table-size` which define the size of blocks in pool allocations, and the size of hash tables. Increasing these values consumes more memory but yields better performances on large timed automaton as the number of allocations, and the number of hash table collisions, increase significantly with the size of the automaton and its zone graph.
+```
+Usage: build/src/tck-matrix [options] [file]
+   -h                     help
+   -o out_file            output file (default is standard output)
+   -i                     show initial zone matrix only
+   -d                     detailed output (both constraints and matrix)
+   -s simulation_steps    perform simulation with given steps and show zone matrices
+reads from standard input if file is not provided
+```
+
+Example:
+
+```
+./src/tck-matrix -s 5 ../fisher.tck 
+```

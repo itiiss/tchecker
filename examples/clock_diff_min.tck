@@ -1,0 +1,10 @@
+system:clock_diff_min
+
+event:tau
+
+process:P
+clock:1:x
+clock:1:y
+location:P:l0{initial:}
+location:P:l1{}
+edge:P:l0:l1:tau{provided:x-y<3}

@@ -381,6 +381,7 @@ public:
     }
   }
 
+  // diagonal constraints are not supported 
   /*!
   \brief Visitor
   \throw std::runtime_error : as diagonal constraints are not supported by diagonal-free solver
