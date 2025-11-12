@@ -1,0 +1,14 @@
+system:diag_invariant
+
+event:loop
+event:back
+
+process:P
+clock:1:x
+clock:1:y
+location:P:l0{initial: : invariant: x<=6 && y<=6}
+location:P:l1{invariant: x-y<=2 && x<=8 && y<=8}
+location:P:lbad{}
+edge:P:l0:l1:loop{provided: x>=3 : do: x=0}
+edge:P:l1:l0:back{provided: y>=1 && x-y<=1 : do: y=0}
+edge:P:l1:lbad:loop{provided: x-y>2}

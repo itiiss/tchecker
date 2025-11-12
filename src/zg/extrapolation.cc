@@ -5,8 +5,12 @@
  *
  */
 
-#include "tchecker/zg/extrapolation.hh"
+#include <iostream>
+
 #include "tchecker/clockbounds/solver.hh"
+#include "tchecker/ta/static_analysis.hh"
+#include "tchecker/utils/log.hh"
+#include "tchecker/zg/extrapolation.hh"
 
 namespace tchecker {
 
@@ -224,6 +228,11 @@ tchecker::zg::extrapolation_t * extrapolation_factory(enum extrapolation_type_t 
 {
   if (extrapolation_type == tchecker::zg::NO_EXTRAPOLATION)
     return new tchecker::zg::no_extrapolation_t;
+
+  if (tchecker::ta::has_diagonal_constraint(system)) {
+    std::cerr << tchecker::log_warning << "diagonal clock constraints detected: forcing NO_EXTRAPOLATION" << std::endl;
+    return new tchecker::zg::no_extrapolation_t;
+  }
 
   std::unique_ptr<tchecker::clockbounds::clockbounds_t> clock_bounds{tchecker::clockbounds::compute_clockbounds(system)};
   if (clock_bounds.get() == nullptr)

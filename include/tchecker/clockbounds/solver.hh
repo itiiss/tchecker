@@ -282,8 +282,9 @@ void add_edge_constraints(tchecker::typed_expression_t const & guard, tchecker::
  \param clockbounds : clock bound maps
  \pre clockbounds maps have the same numbers of clocks and locations as system
  \post if clock bounds can be computed for system, then clockbounds has been filled with the computed clock
- bounds, otherwise, clockbounds is empty
- \throw std::runtime_error : if clock bounds cannot be computed for system
+ bounds. When system carries diagonal clock constraints, LU/M maps are resized but left unconstrained so that
+ diagonal-aware analyses can fall back to DBM-based simulation.
+ \throw std::runtime_error : if clock bounds cannot be computed for system (except for the diagonal case above)
  */
 void compute_clockbounds(tchecker::ta::system_t const & system, tchecker::clockbounds::clockbounds_t & clockbounds);
 

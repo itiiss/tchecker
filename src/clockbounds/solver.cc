@@ -7,12 +7,14 @@
 
 #include <cassert>
 #include <cstring>
+#include <iostream>
 #include <unordered_set>
 
 #include "tchecker/clockbounds/solver.hh"
 #include "tchecker/expression/static_analysis.hh"
 #include "tchecker/statement/clock_updates.hh"
 #include "tchecker/statement/static_analysis.hh"
+#include "tchecker/ta/static_analysis.hh"
 #include "tchecker/utils/log.hh"
 namespace tchecker {
 
@@ -440,6 +442,15 @@ void add_edge_constraints(tchecker::typed_expression_t const & guard, tchecker::
 
 void compute_clockbounds(tchecker::ta::system_t const & system, tchecker::clockbounds::clockbounds_t & clockbounds)
 {
+  clockbounds.resize(static_cast<tchecker::loc_id_t>(system.locations_count()),
+                     static_cast<tchecker::clock_id_t>(system.clocks_count(tchecker::VK_FLATTENED)));
+
+  if (tchecker::ta::has_diagonal_constraint(system)) {
+    std::cerr << tchecker::log_warning << "diagonal clock constraints detected: LU/M bounds left unconstrained"
+              << std::endl;
+    return;
+  }
+
   std::shared_ptr<tchecker::clockbounds::df_solver_t> solver{new tchecker::clockbounds::df_solver_t{system}};
 
   for (tchecker::system::loc_const_shared_ptr_t const & loc : system.locations())

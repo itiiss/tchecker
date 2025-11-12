@@ -1,0 +1,9 @@
+system:no_diag_simple
+
+event:tau
+
+process:P
+clock:1:x
+location:P:l0{initial: : invariant: x<=5}
+location:P:l1{}
+edge:P:l0:l1:tau{provided: x>=3 : do: x=0}

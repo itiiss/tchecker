@@ -13,6 +13,8 @@
  \brief Covering reachability algorithm over the zone graph with zone inclusion
 */
 
+#include <memory>
+
 #include "tchecker/algorithms/covreach/algorithm.hh"
 #include "tchecker/graph/edge.hh"
 #include "tchecker/graph/node.hh"
@@ -31,6 +33,8 @@ namespace tchecker {
 namespace tck_reach {
 
 namespace zg_covreach {
+
+class g_simulation_cache_t;
 
 /*!
  \class node_t
@@ -81,6 +85,8 @@ public:
 */
 class node_le_t {
 public:
+  explicit node_le_t(std::shared_ptr<tchecker::tck_reach::zg_covreach::g_simulation_cache_t> const & g_cache);
+
   /*!
   \brief Covering predicate for nodes
   \param n1 : a node
@@ -90,6 +96,9 @@ public:
   */
   bool operator()(tchecker::tck_reach::zg_covreach::node_t const & n1,
                   tchecker::tck_reach::zg_covreach::node_t const & n2) const;
+
+private:
+  std::shared_ptr<tchecker::tck_reach::zg_covreach::g_simulation_cache_t> _g_cache;
 };
 
 /*!
@@ -114,9 +123,15 @@ class graph_t : public tchecker::graph::subsumption::graph_t<
                     tchecker::tck_reach::zg_covreach::node_t, tchecker::tck_reach::zg_covreach::edge_t,
                     tchecker::tck_reach::zg_covreach::node_hash_t, tchecker::tck_reach::zg_covreach::node_le_t> {
 public:
+  using base_graph_t =
+      tchecker::graph::subsumption::graph_t<tchecker::tck_reach::zg_covreach::node_t, tchecker::tck_reach::zg_covreach::edge_t,
+                                            tchecker::tck_reach::zg_covreach::node_hash_t,
+                                            tchecker::tck_reach::zg_covreach::node_le_t>;
+
   /*!
    \brief Constructor
    \param zg : zone graph
+   \param g_cache : shared G-simulation cache
    \param block_size : number of objects allocated in a block
    \param table_size : size of hash table
    \note this keeps a pointer on zg
@@ -125,7 +140,9 @@ public:
    when zg is destroyed. See state_space_t below to store both fzg and this graph and destroy them in the expected
    order.
   */
-  graph_t(std::shared_ptr<tchecker::zg::zg_t> const & zg, std::size_t block_size, std::size_t table_size);
+  graph_t(std::shared_ptr<tchecker::zg::zg_t> const & zg,
+          std::shared_ptr<tchecker::tck_reach::zg_covreach::g_simulation_cache_t> const & g_cache, std::size_t block_size,
+          std::size_t table_size);
 
   /*!
    \brief Accessor
@@ -138,6 +155,20 @@ public:
    \return internal zone graph
   */
   inline tchecker::zg::zg_t const & zg() const { return *_zg; }
+
+  /*!
+   \brief Accessor
+   \return shared G-simulation cache
+   */
+  inline std::shared_ptr<tchecker::tck_reach::zg_covreach::g_simulation_cache_t> const & g_cache() const { return _g_cache; }
+
+  using base_graph_t::add_edge;
+  using base_graph_t::add_node;
+
+  typename base_graph_t::edge_sptr_t add_edge(typename base_graph_t::node_sptr_t const & src,
+                                              typename base_graph_t::node_sptr_t const & tgt,
+                                              enum tchecker::graph::subsumption::edge_type_t edge_type,
+                                              tchecker::zg::transition_t const & t);
 
   using tchecker::graph::subsumption::graph_t<
       tchecker::tck_reach::zg_covreach::node_t, tchecker::tck_reach::zg_covreach::edge_t,
@@ -168,6 +199,7 @@ protected:
   virtual void attributes(tchecker::tck_reach::zg_covreach::edge_t const & e, std::map<std::string, std::string> & m) const;
 
 private:
+  std::shared_ptr<tchecker::tck_reach::zg_covreach::g_simulation_cache_t> _g_cache; /*!< G-simulation cache */
   std::shared_ptr<tchecker::zg::zg_t> _zg; /*!< Zone graph */
 };
 
@@ -208,6 +240,7 @@ public:
   tchecker::tck_reach::zg_covreach::graph_t & graph();
 
 private:
+  std::shared_ptr<tchecker::tck_reach::zg_covreach::g_simulation_cache_t> _g_cache; /*!< Shared G-simulation cache */
   tchecker::ts::state_space_t<tchecker::zg::zg_t, tchecker::tck_reach::zg_covreach::graph_t>
       _ss; /*!< State-space representation */
 };

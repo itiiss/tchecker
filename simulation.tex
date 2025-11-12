@@ -1,0 +1,80 @@
+\documentclass[11pt]{article}
+\usepackage{geometry}
+\geometry{a4paper, margin=1in}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{amsmath}
+\usepackage{booktabs}
+
+\title{Implementation of the Zone Simulation Relation in \texttt{tchecker}}
+\author{Prepared for Meeting with Advisor}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{Background}
+The correctness and termination of the covering reachability algorithm over zone graphs rely on the well-quasi ordering of the simulation relation introduced in Section~8 of the companion paper (\emph{simulation\_relation.pdf}).  In \texttt{tchecker}, this relation is realised over Difference Bound Matrices (DBMs) and enforced during the exploration carried by the \texttt{covreach} algorithm.  The code base (commit state identical to the current working tree) materialises the theoretical relation \( Z \preceq_{G(q)} Z' \) and its negation through a modular chain of functions and data structures, as summarised in \texttt{simulation\_relation.md}.
+
+\section{Architectural Overview}
+\subsection{State-Space Construction}
+Given a timed automaton system, \texttt{tchecker::zg::zg\_t} builds the symbolic zone graph by repeated calls to \texttt{zg::next} (\texttt{src/zg/zg.cc:67--93}).  The chosen semantics (\texttt{elapsed\_semantics\_t}) implements the sequence ``source invariant $\rightarrow$ guard $\rightarrow$ reset $\rightarrow$ target invariant $\rightarrow$ time-elapse'' (cf.~\texttt{src/zg/semantics.cc:131--155}), ensuring that each zone already encodes the set \( G(q) \) described in the paper.  Extrapolation (EL+LU) bounds the space of constraints so that only finitely many DBMs are generated per control location.
+
+\subsection{Covering Reachability}
+Exploration is delegated to \texttt{covreach::algorithm\_t} (\texttt{include/tchecker/algorithms/covreach/algorithm.hh}).  For each node, \texttt{expand\_next\_nodes} enumerates successors and inserts them in a subsumption graph.  Before a successor is enqueued, \texttt{graph.is\_covered} checks whether an existing node simulates it; if so, only a subsumption edge is recorded.  Symmetrically, \texttt{remove\_covered\_nodes} deletes nodes strictly dominated by the newly inserted one.  This mirrors the argument in Section~8 that every infinite sequence \((q,Z_0),(q,Z_1),\ldots\) eventually contains a pair \(i<j\) with \(Z_i \preceq_{G(q)} Z_j\).
+
+\section{Simulation Check Chain}
+Figure~\ref{fig:chain} lists the call chain that implements \( Z \preceq_{G(q)} Z' \).
+
+\begin{table}[h]
+  \centering
+  \begin{tabular}{@{}p{0.25\linewidth}p{0.65\linewidth}@{}}
+    \toprule
+    Component & Role \\
+    \midrule
+    \texttt{expand\_next\_nodes} & Generates successors, then delegates coverage decisions to the subsumption graph (\texttt{include/tchecker/algorithms/covreach/algorithm.hh:170--188}). \\
+    \texttt{subsumption::graph\_t::is\_covered} & Scans the hash bucket of candidates sharing the discrete skeleton; invokes \texttt{node\_le\_t} to test simulation (\texttt{include/tchecker/graph/cover\_graph.hh:146--157}). \\
+    \texttt{node\_le\_t::operator()} & Ensures the discrete parts coincide and forwards the request to \texttt{zg::shared\_is\_le} (\texttt{src/tck-reach/zg-covreach.cc:37--49}). \\
+    \texttt{zg::shared\_is\_le} & Checks pointer equality on locations and integer valuations, then requires zone inclusion (\texttt{src/zg/state.cc:48--56}). \\
+    \texttt{zone\_t::operator<=} & Handles empty zones and compares DBMs entry-wise via \texttt{dbm::is\_le} (\texttt{src/zg/zone.cc:45--54}). \\
+    \texttt{dbm::is\_le} & Implements exact inclusion: each constraint \(x_i - x_j \le c\) in the first DBM must be weaker or equal to the counterpart in the second (quadratic in the number of clocks; \texttt{src/dbm/dbm.cc:315--327}). \\
+    \bottomrule
+  \end{tabular}
+  \caption{Call chain implementing \( Z \preceq_{G(q)} Z' \).}
+  \label{fig:chain}
+\end{table}
+
+Negation of the relation (\( \neg (Z \preceq_{G(q)} Z')\)) arises naturally: if any entry violates the inequality in \texttt{dbm::is\_le}, the function returns \texttt{false}, which is propagated back to \texttt{expand\_next\_nodes}; the new node is therefore kept in the waiting structure.  Conversely, when a new zone covers existing ones, \texttt{remove\_covered\_nodes} removes the dominated nodes and rewrites incoming edges as subsumption edges, preserving the well-quasi ordering required for termination.
+
+\section{Complexity Considerations}
+Let \(d\) denote the number of clocks (thus DBM dimension \(d+1\)), \(B\) the branching factor of the symbolic transition relation, \(K\) the average number of candidates in a hash bucket, and \(N\) the number of explored nodes.
+
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Zone inclusion} (\texttt{zone\_t::operator<=} / \texttt{dbm::is\_le}) costs \(\Theta(d^2)\) per invocation.
+  \item \textbf{Coverage test} (\texttt{graph.is\_covered}) scans \(K\) candidates, yielding \(O(K \cdot d^2)\).
+  \item \textbf{Successor expansion} (\texttt{expand\_next\_nodes}) applies the previous test to each successor; its complexity is \(O(B \cdot K \cdot d^2)\).
+  \item \textbf{Global exploration} thus requires \(O(N \cdot B \cdot K \cdot d^2)\) time in the worst case.  Memory consumption is linear in the size of the subsumption graph and the waiting structure, both \(O(N)\).
+\end{itemize}
+
+\section{Discussion}
+The implementation follows the academic design of Section~8 faithfully:
+\begin{itemize}[leftmargin=*]
+  \item \emph{Correctness}: The chain of refinements from subsumption nodes down to raw DBMs matches the theoretical relation \( \preceq_{G(q)}\).
+  \item \emph{Termination}: The removal of dominated nodes and the boundedness induced by extrapolation guarantee that every infinite sequence over a fixed control location stabilises, meeting the paper's finiteness assumption.
+  \item \emph{Extensibility}: Alternative abstractions (e.g.\ LU$^\ast$ with reference clocks) reuse the same subsumption infrastructure by swapping the comparison functor (\texttt{node\_le\_t}).
+\end{itemize}
+
+\section{Key Source Artefacts}
+\begin{itemize}[leftmargin=*]
+  \item \texttt{include/tchecker/algorithms/covreach/algorithm.hh:170--217} --- successor expansion and removal of dominated nodes.
+  \item \texttt{include/tchecker/graph/cover\_graph.hh:70--173} --- subsumption graph primitives.
+  \item \texttt{src/tck-reach/zg-covreach.cc:37--65} --- zone-graph specific hash and ordering.
+  \item \texttt{src/zg/state.cc:48--90}, \texttt{src/zg/zone.cc:45--73} --- state/zone simulation predicates.
+  \item \texttt{src/dbm/dbm.cc:315--327} --- DBM inclusion kernel.
+  \item \texttt{simulation\_relation.md} --- internal documentation summarising the mapping between theory and implementation.
+\end{itemize}
+
+\section{Conclusion}
+The \texttt{tchecker} implementation realises the theoretical simulation relation by layering discrete equality tests, zone inclusion, and DBM comparisons, exactly reflecting Section~8 of the reference paper.  The covering reachability algorithm leverages this relation both to prune the exploration and to ensure termination, with explicit complexity bounds guided by the number of clocks and the branching structure of the model.  These guarantees can be presented confidently during the upcoming meeting with the supervising professor.
+
+\end{document}

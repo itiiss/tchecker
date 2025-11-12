@@ -44,12 +44,16 @@ bool zone_t::operator!=(tchecker::zg::zone_t const & zone) const { return !(*thi
 
 bool zone_t::operator<=(tchecker::zg::zone_t const & zone) const
 {
+  // 参数：zone 为比较对象；返回值：若当前 zone 中的所有估值都包含于参数 zone，则返回 true。
+  // 机制：依次处理维度、空区等特例，最终调用 DBM 层面的逐元素比较实现约束包含。
+  // 含义：用于表示 Z ⊆ Z' 的仿真关系，是更高层状态比较的核心判断。
   if (_dim != zone._dim)
     return false;
   if (this->is_empty())
     return true;
   if (zone.is_empty())
     return false;
+  // 逐条 DBM 约束比较：本 zone 的每个限制都不得强于被比较的 zone
   return tchecker::dbm::is_le(dbm_ptr(), zone.dbm_ptr(), _dim);
 }
 

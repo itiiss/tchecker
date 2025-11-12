@@ -466,7 +466,8 @@ enum extrapolation_type_t {
  \param system : system of timed processes
  \return a zone extrapolation of type extrapolation_type using clock bounds
  inferred from system, nullptr if clock bounds cannot be inferred from system (see
- tchecker::clockbounds::compute_clockbounds)
+ tchecker::clockbounds::compute_clockbounds). If system contains diagonal clock constraints, the factory
+ silently downgrades to tchecker::zg::NO_EXTRAPOLATION to keep simulation sound.
  \note the returned extrapolation must be deallocated by the caller
  \throw std::invalid_argument : if extrapolation_type is unknown
  \throw std::runtime_error : if clock bounds cannot be computed for system

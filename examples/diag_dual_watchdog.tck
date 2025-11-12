@@ -1,0 +1,22 @@
+system:diag_dual_watchdog
+
+event:beatA
+event:beatB
+event:missB
+event:alarm
+event:recover
+
+process:Monitor
+clock:1:xa
+clock:1:xb
+location:Monitor:aligned{initial: : invariant: xa<=5 && xb<=5}
+location:Monitor:stagger{invariant: xa<=7 && xb<=7 }
+location:Monitor:hazard{labels: error}
+edge:Monitor:aligned:aligned:beatA{provided: xa>=2 : do: xa=0}
+edge:Monitor:aligned:aligned:beatB{provided: xb>=4 : do: xb=0}
+edge:Monitor:aligned:stagger:missB{provided: xb-xa>=4 && xb>=4 && xa<=1}
+edge:Monitor:aligned:aligned:recover{provided: xa<=1 && xb<=1 : do: xa=0; xb=0}
+edge:Monitor:stagger:stagger:beatA{provided: xa>=2 : do: xa=0}
+edge:Monitor:stagger:stagger:beatB{provided: xb>=4 : do: xb=0}
+edge:Monitor:stagger:hazard:alarm{provided: xb-xa>=4}
+edge:Monitor:stagger:aligned:recover{provided: xa<=1 && xb<=1 : do: xa=0; xb=0}

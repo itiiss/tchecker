@@ -161,26 +161,33 @@ tchecker::state_status_t elapsed_semantics_t::prev(tchecker::dbm::db_t * dbm, tc
                                                    tchecker::clock_reset_container_t const & clkreset, bool tgt_delay_allowed,
                                                    tchecker::clock_constraint_container_t const & tgt_invariant)
 {
+  // 目标不变式：到达 q′ 时必须在其不变式内
   if (tchecker::dbm::constrain(dbm, dim, tgt_invariant) == tchecker::dbm::EMPTY)
     return tchecker::STATE_CLOCKS_TGT_INVARIANT_VIOLATED;
 
+  // 若 q′ 允许延时，
   if (tgt_delay_allowed) {
+    // 允许把时间“倒回”，是 open_up 时间延迟的逆向
     tchecker::dbm::open_down(dbm, dim);
-
+    // 倒回的这段时间里仍必须满足 q′ 的不变式
     if (tchecker::dbm::constrain(dbm, dim, tgt_invariant) == tchecker::dbm::EMPTY)
       return tchecker::STATE_CLOCKS_TGT_INVARIANT_VIOLATED;
   }
 
+  // 将reset转成后态约束并相交，计算所有可能的前态集合
   tchecker::clock_constraint_container_t resets_as_constraints;
   tchecker::clock_resets_to_constraints(clkreset, resets_as_constraints);
   if (tchecker::dbm::constrain(dbm, dim, resets_as_constraints) == tchecker::dbm::EMPTY)
     return tchecker::STATE_CLOCKS_RESET_FAILED;
 
+  // 释放被重置的时钟（free_clock）
   tchecker::dbm::free_clock(dbm, dim, clkreset);
 
+  // 源态必须满足 guard
   if (tchecker::dbm::constrain(dbm, dim, guard) == tchecker::dbm::EMPTY)
     return tchecker::STATE_CLOCKS_GUARD_VIOLATED;
 
+  // 源态必须满足 src invariant
   if (tchecker::dbm::constrain(dbm, dim, src_invariant) == tchecker::dbm::EMPTY)
     return tchecker::STATE_CLOCKS_SRC_INVARIANT_VIOLATED;
 

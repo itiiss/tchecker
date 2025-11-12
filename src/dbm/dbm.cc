@@ -314,12 +314,16 @@ bool satisfies(tchecker::dbm::db_t const * dbm, tchecker::clock_id_t dim, tcheck
 
 bool is_le(tchecker::dbm::db_t const * dbm1, tchecker::dbm::db_t const * dbm2, tchecker::clock_id_t dim)
 {
+  // 参数：dbm1、dbm2 为已紧化的 DBM，dim 为矩阵维度；返回值：若 dbm1 表示的约束集合被 dbm2 包含则为 true。
+  // 机制：逐个比对每个 xi-xj 条目，只要遇到一处 dbm1 约束更强（更大）即判定失败。
+  // 作用：作为 zone 层包含性的基础原语，被仿真关系链路最终调用。
   assert(dbm1 != nullptr);
   assert(dbm2 != nullptr);
   assert(dim >= 1);
   assert(tchecker::dbm::is_tight(dbm1, dim));
   assert(tchecker::dbm::is_tight(dbm2, dim));
 
+  // 逐项比较 DBM 约束：只有当 dbm1 中每个 xi-xj 上界都不大于 dbm2 的对应值时才算包含
   for (tchecker::clock_id_t i = 0; i < dim; ++i)
     for (tchecker::clock_id_t j = 0; j < dim; ++j)
       if (DBM1(i, j) > DBM2(i, j))

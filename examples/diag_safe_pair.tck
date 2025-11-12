@@ -1,0 +1,15 @@
+system:diag_safe_pair
+
+event:tick
+event:handshake
+event:alarm
+
+process:P
+clock:1:x
+clock:1:y
+location:P:l0{initial: : invariant: x<=5 && y<=5 && x-y<=2}
+location:P:l1{}
+location:P:lbad{labels: error}
+edge:P:l0:l0:tick{provided: x>=1 : do: x=0}
+edge:P:l0:l1:handshake{provided: y>=1 && x<=2 && x-y<=1 : do: y=0}
+edge:P:l1:lbad:alarm{provided: y-x<=-3}

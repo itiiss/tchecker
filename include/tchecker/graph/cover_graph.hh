@@ -145,8 +145,12 @@ public:
    */
   bool is_covered(NODE_SPTR const & n, NODE_SPTR & covering_node) const
   {
+    // 参数：n 为新节点，covering_node 为输出引用；返回值：存在覆盖者时为 true。
+    // 机制：遍历哈希桶内所有候选节点，调用 _node_le(n, node) 进行覆盖判定。
+    // 输出：若找到覆盖节点，则 covering_node 指向该节点；否则返回 false 并将 covering_node 置空。
     auto && range = _nodes.collision_range(n);
     for (NODE_SPTR const & node : range) {
+      // 只遍历同哈希桶中的候选节点；当 node_le 判定 n ⪯ node 时即可确认覆盖者
       if ((n != node) && _node_le(n, node)) {
         covering_node = node;
         return true;

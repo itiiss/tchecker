@@ -170,6 +170,10 @@ public:
   void expand_next_nodes(typename GRAPH::node_sptr_t const & node, TS & ts, GRAPH & graph,
                          std::vector<typename GRAPH::node_sptr_t> & next_nodes, tchecker::algorithms::covreach::stats_t & stats)
   {
+    // 参数：node 为当前展开的图节点；ts 为底层转移系统；graph 为覆盖图；next_nodes 用于收集尚未被覆盖的后继；
+    //       stats 记录统计信息。函数无显式返回值，通过 next_nodes 及图结构的副作用体现结果。
+    // 机制：调用 ts.next 生成后继状态，逐个插入 graph；每个候选后继立即交由 graph.is_covered 判定。
+    //       若已存在覆盖节点则仅连接 subsumption 边并丢弃该候选，否则保留并加入 next_nodes。
     std::vector<typename TS::sst_t> sst;
     typename GRAPH::node_sptr_t covering_node;
 
@@ -178,6 +182,7 @@ public:
       ++stats.visited_transitions();
       typename GRAPH::node_sptr_t next_node = graph.add_node(s);
       if (graph.is_covered(next_node, covering_node)) {
+        // 已存在覆盖该后继的节点：记录一条 subsumption 边并丢弃被支配的后继
         graph.add_edge(node, covering_node, tchecker::graph::subsumption::EDGE_SUBSUMPTION, *t);
         graph.remove_node(next_node);
         ++stats.covered_states();
