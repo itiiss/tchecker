@@ -229,6 +229,7 @@ tchecker::zg::extrapolation_t * extrapolation_factory(enum extrapolation_type_t 
   if (extrapolation_type == tchecker::zg::NO_EXTRAPOLATION)
     return new tchecker::zg::no_extrapolation_t;
 
+    // 检测 diagonal 约束，打印 warning 并改用 `no_extrapolation_t`
   if (tchecker::ta::has_diagonal_constraint(system)) {
     std::cerr << tchecker::log_warning << "diagonal clock constraints detected: forcing NO_EXTRAPOLATION" << std::endl;
     return new tchecker::zg::no_extrapolation_t;

@@ -1,4 +1,4 @@
-zg-c/*
+/*
  * This file is a part of the TChecker project.
  *
  * See files AUTHORS and LICENSE for copyright details.
@@ -8,8 +8,10 @@ zg-c/*
 #include <algorithm>
 #include <cassert>
 #include <deque>
+#include <iostream>
 #include <unordered_map>
 #include <unordered_set>
+#include <sstream>
 
 #include <boost/dynamic_bitset.hpp>
 
@@ -17,8 +19,10 @@ zg-c/*
 #include "tchecker/algorithms/search_order.hh"
 #include "tchecker/dbm/dbm.hh"
 #include "tchecker/system/static_analysis.hh"
+#include "tchecker/ta/static_analysis.hh"
 #include "tchecker/ta/ta.hh"
 #include "tchecker/ta/state.hh"
+#include "tchecker/syncprod/vloc.hh"
 #include "tchecker/utils/log.hh"
 #include "tchecker/utils/shared_objects.hh"
 #include "tchecker/zg/semantics.hh"
@@ -28,6 +32,7 @@ namespace tchecker {
 
 namespace tck_reach {
 
+// 重写覆盖逻辑，引入 `g_simulation_cache_t` 维护各位置的 G(q) DBM、记录转移并反向传播
 namespace zg_covreach {
 
 // 对每个位置做：把“到达该位置后必须保持的约束”逆推回它的前驱，再逆推前驱的前驱……直到全图稳定
@@ -47,34 +52,60 @@ public:
     if (_entries.find(vloc) != _entries.end())
       return;
 
-    entry e;
-    e.dbm.resize(static_cast<std::size_t>(_dim) * static_cast<std::size_t>(_dim));
-    tchecker::dbm::universal_positive(e.dbm.data(), _dim);
-    for (tchecker::clock_id_t x = 1; x < _dim; ++x)
-      e.dbm[static_cast<std::size_t>(x) * _dim + 0] = tchecker::dbm::LE_ZERO;
-    tchecker::dbm::tighten(e.dbm.data(), _dim);
-    _entries.emplace(vloc, std::move(e));
+	    entry e;
+	    e.dbm.resize(static_cast<std::size_t>(_dim) * static_cast<std::size_t>(_dim));
+	    tchecker::dbm::universal_positive(e.dbm.data(), _dim);
+	    e.seeded = false;
+	    // Do not force x<=0. Start with unconstrained (INF).
+	    _entries.emplace(vloc, std::move(e));
+    std::cout << "[G] ensure_entry new location " << vloc_label(vloc) << std::endl;
   }
 
-  bool simulation_leq(tchecker::const_vloc_sptr_t const & vloc, tchecker::zg::zone_t const & lhs,
-                      tchecker::zg::zone_t const & rhs) const
-  {
-    auto it = _entries.find(vloc);
-    if (it == _entries.end())
-      return lhs <= rhs;
+	  void seed_state(tchecker::zg::state_t const & state)
+	  {
+	    tchecker::const_vloc_sptr_t vloc =
+	        tchecker::static_pointer_cast<tchecker::shared_vloc_t const>(state.vloc_ptr());
+	    ensure_entry(vloc);
+	    auto it = _entries.find(vloc);
+	    if (it == _entries.end())
+	      return;
+	    if (it->second.seeded)
+	      return;
+
+	    it->second.dbm.assign(state.zone().dbm(),
+	                          state.zone().dbm() + static_cast<std::size_t>(_dim) * static_cast<std::size_t>(_dim));
+	    it->second.seeded = true;
+	    std::cout << "[G] seed_state(" << vloc_label(vloc) << ")" << std::endl;
+	    enqueue(vloc);
+	    process_pending();
+	  }
+
+	  bool simulation_leq(tchecker::const_vloc_sptr_t const & vloc, tchecker::zg::zone_t const & lhs,
+	                      tchecker::zg::zone_t const & rhs) const
+	  {
+	    auto it = _entries.find(vloc);
+	    if (it == _entries.end() || !it->second.seeded ||
+	        !tchecker::dbm::is_consistent(it->second.dbm.data(), _dim))
+	      return lhs <= rhs;
 
     tchecker::dbm::db_t const * lhs_dbm = lhs.dbm();
     tchecker::dbm::db_t const * rhs_dbm = rhs.dbm();
     auto const & g_dbm = it->second.dbm;
 
-    for (std::size_t i = 0; i < _dim; ++i) {
-      for (std::size_t j = 0; j < _dim; ++j) {
-        std::size_t idx = i * _dim + j;
-        if (g_dbm[idx] == tchecker::dbm::LT_INFINITY)
-          continue;
-        if (tchecker::dbm::db_cmp(lhs_dbm[idx], rhs_dbm[idx]) > 0)
+    // Compute intersection of lhs and G(q)
+    std::vector<tchecker::dbm::db_t> intersection(lhs_dbm, lhs_dbm + _dim * _dim);
+    for (std::size_t i = 0; i < _dim * _dim; ++i) {
+       intersection[i] = tchecker::dbm::min(intersection[i], g_dbm[i]);
+    }
+
+    // Check if intersection is empty
+    if (tchecker::dbm::tighten(intersection.data(), _dim) == tchecker::dbm::EMPTY)
+       return true; // Empty intersection is subset of anything
+
+    // Check if intersection <= rhs
+    for (std::size_t i = 0; i < _dim * _dim; ++i) {
+       if (tchecker::dbm::db_cmp(intersection[i], rhs_dbm[i]) > 0)
           return false;
-      }
     }
     return true;
   }
@@ -90,6 +121,7 @@ public:
 
     ensure_entry(src_vloc);
     ensure_entry(tgt_vloc);
+    std::cout << "[G] record_transition " << vloc_label(src_vloc) << " -> " << vloc_label(tgt_vloc) << std::endl;
 
     // 创建一个结构体 g_transition_program_t，收集这条边的所有时钟相关信息
     g_transition_program_t prog;
@@ -116,10 +148,12 @@ public:
     // 对该新边再次调用 apply_program，把 G(q′) 反推到 G(q)
     if (it == bucket.end()) {
       bucket.push_back(std::move(prog));
+      std::cout << "[G]  new incoming program stored (src=" << vloc_label(src_vloc) << ", tgt=" << vloc_label(tgt_vloc) << ")" << std::endl;
       if (apply_program(bucket.back(), tgt_vloc))
         enqueue(bucket.back().src_vloc);
     }
     else {
+      std::cout << "[G]  existing program re-applied (src=" << vloc_label(src_vloc) << ", tgt=" << vloc_label(tgt_vloc) << ")" << std::endl;
       // 如果不是新边，则直接调用 apply_program 更新
       // G(tgt_vloc) 可能在先前的某次传播中变得更强/更宽松了
       // 需要把最新的 G(tgt_vloc) 再次通过这条入边向前更新 G(src_vloc)，以继续逼近不动点
@@ -131,9 +165,10 @@ public:
   }
 
 private:
-  struct entry {
-    std::vector<tchecker::dbm::db_t> dbm;
-  };
+	struct entry {
+	  std::vector<tchecker::dbm::db_t> dbm;
+	  bool seeded = false;
+	};
 
   struct g_transition_program_t {
     tchecker::const_vloc_sptr_t src_vloc;
@@ -148,10 +183,12 @@ private:
 
   bool apply_program(g_transition_program_t const & prog, tchecker::const_vloc_sptr_t const & tgt_vloc)
   {
-    auto tgt_it = _entries.find(tgt_vloc);
-    if (tgt_it == _entries.end())
-      return false;
+	    auto tgt_it = _entries.find(tgt_vloc);
+	    if (tgt_it == _entries.end() || !tgt_it->second.seeded ||
+	        !tchecker::dbm::is_consistent(tgt_it->second.dbm.data(), _dim))
+	      return false;
 
+    std::cout << "[G] apply_program src=" << vloc_label(prog.src_vloc) << " tgt=" << vloc_label(tgt_vloc) << std::endl;
     // 拿到目标位置 q′ 的 G(q′)。复制一份为candidate
     std::vector<tchecker::dbm::db_t> candidate = tgt_it->second.dbm;
     // 相当于论文的 pre(prog,G(q′))，应用目标 invariant 和 guard 的逆向 + 撤销 reset + 考虑源 invariant + 把 delay 的逆向效果处理掉
@@ -159,12 +196,16 @@ private:
     tchecker::state_status_t status =
         _semantics.prev(candidate.data(), _dim, prog.src_delay_allowed, prog.src_invariant, prog.guard, prog.reset,
                         prog.tgt_delay_allowed, prog.tgt_invariant);
-    if (status != tchecker::STATE_OK)
+    if (status != tchecker::STATE_OK) {
+      std::cout << "[G]  prev returned status " << status << " (no update)" << std::endl;
       return false;
+    }
 
     // 调 tighten() 保证闭包
-    if (tchecker::dbm::tighten(candidate.data(), _dim) == tchecker::dbm::EMPTY)
+    if (tchecker::dbm::tighten(candidate.data(), _dim) == tchecker::dbm::EMPTY) {
+      std::cout << "[G]  tightened candidate is empty" << std::endl;
       return false;
+    }
 
     auto src_it = _entries.find(prog.src_vloc);
     if (src_it == _entries.end())
@@ -177,24 +218,26 @@ private:
   bool widen(std::vector<tchecker::dbm::db_t> & target, std::vector<tchecker::dbm::db_t> const & src)
   {
     bool changed = false;
-     // 逐元素取 max()，即 G(q)[i,j]:=max(G(q)[i,j], candidate[i,j])，因为 DBM 中数值越大越宽松
+     // Use min() to compute intersection of DBMs (Union of constraints)
     for (std::size_t idx = 0, size = target.size(); idx < size; ++idx) {
-      tchecker::dbm::db_t bound = tchecker::dbm::max(target[idx], src[idx]);
+      tchecker::dbm::db_t bound = tchecker::dbm::min(target[idx], src[idx]);
       if (bound != target[idx]) {
         target[idx] = bound;
         changed = true;
       }
     }
-    // 若有变化，就返回 true，触发继续反向传播
-    if (changed)
+    if (changed) {
       tchecker::dbm::tighten(target.data(), _dim);
+    }
     return changed;
   }
 
   void enqueue(tchecker::const_vloc_sptr_t const & vloc)
   {
-    if (_in_queue.insert(vloc).second)
+    if (_in_queue.insert(vloc).second) {
       _pending.push_back(vloc);
+      std::cout << "[G] enqueue " << vloc_label(vloc) << ", pending size=" << _pending.size() << std::endl;
+    }
   }
 
 // 在时间自动机的转移图（每个 location 为节点，edge 为 timed transition）上工作；
@@ -209,6 +252,7 @@ private:
       tchecker::const_vloc_sptr_t current = _pending.front();
       _pending.pop_front();
       _in_queue.erase(current);
+      std::cout << "[G] process_pending pop " << vloc_label(current) << ", remaining=" << _pending.size() << std::endl;
 
       auto incoming_it = _incoming.find(current);
       if (incoming_it == _incoming.end())
@@ -228,6 +272,20 @@ private:
   std::unordered_map<tchecker::const_vloc_sptr_t, std::vector<g_transition_program_t>> _incoming;
   std::deque<tchecker::const_vloc_sptr_t> _pending;
   std::unordered_set<tchecker::const_vloc_sptr_t> _in_queue;
+
+  std::string vloc_label(tchecker::const_vloc_sptr_t const & vloc) const
+  {
+    if (vloc.ptr() == nullptr)
+      return "<null>";
+    try {
+      return tchecker::to_string(*vloc, _zg->system().as_system_system());
+    }
+    catch (...) {
+      std::ostringstream oss;
+      oss << "vloc@" << vloc.ptr();
+      return oss.str();
+    }
+  }
 };
 
 /* node_t */
@@ -288,6 +346,18 @@ graph_t::graph_t(std::shared_ptr<tchecker::zg::zg_t> const & zg,
 {
 }
 
+graph_t::base_graph_t::node_sptr_t graph_t::add_node(tchecker::zg::state_sptr_t const & s)
+{
+  auto node = base_graph_t::add_node(s);
+  return node;
+}
+
+graph_t::base_graph_t::node_sptr_t graph_t::add_node(tchecker::zg::const_state_sptr_t const & s)
+{
+  auto node = base_graph_t::add_node(s);
+  return node;
+}
+
 graph_t::edge_sptr_t graph_t::add_edge(graph_t::base_graph_t::node_sptr_t const & src,
                                        graph_t::base_graph_t::node_sptr_t const & tgt,
                                        enum tchecker::graph::subsumption::edge_type_t edge_type, tchecker::zg::transition_t const & t)
@@ -296,6 +366,19 @@ graph_t::edge_sptr_t graph_t::add_edge(graph_t::base_graph_t::node_sptr_t const 
   if (_g_cache != nullptr)
     _g_cache->record_transition(src->state(), tgt->state(), t);
   return edge;
+}
+
+void graph_t::record_transition(tchecker::zg::state_t const & src_state, tchecker::zg::state_t const & tgt_state,
+                                tchecker::zg::transition_t const & t)
+{
+  if (_g_cache != nullptr)
+    _g_cache->record_transition(src_state, tgt_state, t);
+}
+
+void graph_t::seed_state(tchecker::zg::state_t const & state)
+{
+  if (_g_cache != nullptr)
+    _g_cache->seed_state(state);
 }
 
 bool graph_t::is_actual_edge(edge_sptr_t const & e) const { return edge_type(e) == tchecker::graph::subsumption::EDGE_ACTUAL; }
@@ -410,32 +493,45 @@ std::tuple<tchecker::algorithms::covreach::stats_t, std::shared_ptr<tchecker::tc
 run(tchecker::parsing::system_declaration_t const & sysdecl, std::string const & labels, std::string const & search_order,
     tchecker::algorithms::covreach::covering_t covering, std::size_t block_size, std::size_t table_size)
 {
+  std::cout << "[zg_covreach] run entry" << std::endl;
   std::shared_ptr<tchecker::ta::system_t const> system{new tchecker::ta::system_t{sysdecl}};
+  std::cout << "[zg_covreach] system constructed" << std::endl;
   if (!tchecker::system::every_process_has_initial_location(system->as_system_system()))
     std::cerr << tchecker::log_warning << "system has no initial state" << std::endl;
 
+  enum tchecker::zg::extrapolation_type_t extrapolation =
+      (tchecker::ta::has_diagonal_constraint(*system) ? tchecker::zg::NO_EXTRAPOLATION : tchecker::zg::EXTRA_LU_PLUS_LOCAL);
+  std::cout << "[zg_covreach] extrapolation mode "
+            << (extrapolation == tchecker::zg::NO_EXTRAPOLATION ? "NO_EXTRAPOLATION" : "EXTRA_LU_PLUS_LOCAL") << std::endl;
+
   std::shared_ptr<tchecker::zg::zg_t> zg{tchecker::zg::factory(system, tchecker::ts::SHARING, tchecker::zg::ELAPSED_SEMANTICS,
-                                                               tchecker::zg::NO_EXTRAPOLATION, block_size, table_size)};
+                                                               extrapolation, block_size, table_size)};
+  std::cout << "[zg_covreach] zone graph factory created" << std::endl;
 
   std::shared_ptr<tchecker::tck_reach::zg_covreach::state_space_t> state_space =
       std::make_shared<tchecker::tck_reach::zg_covreach::state_space_t>(zg, block_size, table_size);
+  std::cout << "[zg_covreach] state space ready" << std::endl;
 
   boost::dynamic_bitset<> accepting_labels = system->as_syncprod_system().labels(labels);
+  std::cout << "[zg_covreach] labels computed" << std::endl;
 
   enum tchecker::waiting::policy_t policy = tchecker::algorithms::fast_remove_waiting_policy(search_order);
+  std::cout << "[zg_covreach] waiting policy ready" << std::endl;
 
   tchecker::algorithms::covreach::stats_t stats;
   tchecker::tck_reach::zg_covreach::algorithm_t algorithm;
+  std::cout << "[zg_covreach] starting algorithm.run" << std::endl;
 
   if (covering == tchecker::algorithms::covreach::COVERING_FULL)
     stats = algorithm.run<tchecker::algorithms::covreach::COVERING_FULL>(state_space->zg(), state_space->graph(),
-                                                                         accepting_labels, policy);
+                                                                        accepting_labels, policy);
   else if (covering == tchecker::algorithms::covreach::COVERING_LEAF_NODES)
     stats = algorithm.run<tchecker::algorithms::covreach::COVERING_LEAF_NODES>(state_space->zg(), state_space->graph(),
                                                                                accepting_labels, policy);
   else
     throw std::invalid_argument("Unknown covering policy for covreach algorithm");
 
+  std::cout << "[zg_covreach] algorithm.run finished" << std::endl;
   return std::make_tuple(stats, state_space);
 }
 

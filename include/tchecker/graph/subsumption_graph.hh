@@ -347,6 +347,19 @@ public:
   }
 
   /*!
+   \brief Hook for seeding state information (no-op by default)
+   */
+  template <class STATE> void seed_state(STATE const &) {}
+
+  /*!
+   \brief Hook for recording transitions (no-op by default)
+   */
+  template <class STATE, class TRANSITION>
+  void record_transition(STATE const &, STATE const &, TRANSITION const &)
+  {
+  }
+
+  /*!
    \brief Remove node
    \param n : a node
    \pre n is stored in this graph.

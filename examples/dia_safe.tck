@@ -1,0 +1,30 @@
+system:a_bug
+event:e01
+event:e12
+event:e23
+event:e32
+event:e24
+event:e45
+event:e56
+event:e67
+process:A
+clock:1:x1
+clock:1:x2
+clock:1:x3
+clock:1:x4
+location:A:q0{initial: ;}
+location:A:q1{}
+location:A:q2{}
+location:A:q3{}
+location:A:q4{}
+location:A:q5{}
+location:A:q6{}
+location:A:q7{labels: error}
+edge:A:q0:q1:e01{provided: x3<=3 : do: x1=0; x3=0}
+edge:A:q1:q2:e12{provided: x2==3 : do: x2=0}
+edge:A:q2:q3:e23{provided: x1==2 : do: x1=0}
+edge:A:q3:q2:e32{provided: x2==2 : do: x2=0}
+edge:A:q2:q4:e24{provided: x2==2 : do: x2=0}
+edge:A:q4:q5:e45{provided: x1==3 : do: x1=0}
+edge:A:q5:q6:e56{provided: x2==2 : do: x2=0}
+edge:A:q6:q7:e67{provided: x2 - x1 > 2 && x4 - x3 < 2}

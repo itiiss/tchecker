@@ -163,7 +163,12 @@ public:
   inline std::shared_ptr<tchecker::tck_reach::zg_covreach::g_simulation_cache_t> const & g_cache() const { return _g_cache; }
 
   using base_graph_t::add_edge;
-  using base_graph_t::add_node;
+
+  typename base_graph_t::node_sptr_t add_node(tchecker::zg::state_sptr_t const & s);
+  typename base_graph_t::node_sptr_t add_node(tchecker::zg::const_state_sptr_t const & s);
+  void record_transition(tchecker::zg::state_t const & src_state, tchecker::zg::state_t const & tgt_state,
+                         tchecker::zg::transition_t const & t);
+  void seed_state(tchecker::zg::state_t const & state);
 
   typename base_graph_t::edge_sptr_t add_edge(typename base_graph_t::node_sptr_t const & src,
                                               typename base_graph_t::node_sptr_t const & tgt,

@@ -56,6 +56,7 @@ bool shared_is_le(tchecker::zg::state_t const & s1, tchecker::zg::state_t const 
   // 机制：比较离散骨架指针确保两者指向同一控制点，再判断 zone 指针是否复用或通过 zone<= 进行包含检测。
   // 输出语义：true 表示 s1 可由 s2 模拟，即所有后继行为都包含在 s2 中；false 表示需要保留 s1。
   // 共享组件上的仿真判定：离散骨架一致且 zone 指针相同或出现 zone 包含
+  
   return tchecker::ta::shared_equal_to(s1, s2) && (s1.zone_ptr() == s2.zone_ptr() || s1.zone() <= s2.zone());
 }
 

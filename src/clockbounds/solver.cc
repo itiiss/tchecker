@@ -442,6 +442,7 @@ void add_edge_constraints(tchecker::typed_expression_t const & guard, tchecker::
 
 void compute_clockbounds(tchecker::ta::system_t const & system, tchecker::clockbounds::clockbounds_t & clockbounds)
 {
+  // 实现对角约束检测；当存在 diagonal guard/invariant 时只调整尺寸并发出 warning，而不是继续求解 LU。
   clockbounds.resize(static_cast<tchecker::loc_id_t>(system.locations_count()),
                      static_cast<tchecker::clock_id_t>(system.clocks_count(tchecker::VK_FLATTENED)));
 

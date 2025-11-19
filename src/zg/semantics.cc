@@ -155,6 +155,7 @@ tchecker::state_status_t elapsed_semantics_t::next(tchecker::dbm::db_t * dbm, tc
   return tchecker::STATE_OK;
 }
 
+// 逆向约束流程
 tchecker::state_status_t elapsed_semantics_t::prev(tchecker::dbm::db_t * dbm, tchecker::clock_id_t dim, bool src_delay_allowed,
                                                    tchecker::clock_constraint_container_t const & src_invariant,
                                                    tchecker::clock_constraint_container_t const & guard,
@@ -187,7 +188,7 @@ tchecker::state_status_t elapsed_semantics_t::prev(tchecker::dbm::db_t * dbm, tc
   if (tchecker::dbm::constrain(dbm, dim, guard) == tchecker::dbm::EMPTY)
     return tchecker::STATE_CLOCKS_GUARD_VIOLATED;
 
-  // 源态必须满足 src invariant
+  // 源态必须满足 src invariant 
   if (tchecker::dbm::constrain(dbm, dim, src_invariant) == tchecker::dbm::EMPTY)
     return tchecker::STATE_CLOCKS_SRC_INVARIANT_VIOLATED;
 

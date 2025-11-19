@@ -110,6 +110,7 @@ static bool is_certificate_path(enum certificate_t ctype)
 */
 int parse_command_line(int argc, char * argv[])
 {
+  std::cout << "[tck-reach] parsing command line (" << argc << " args)" << std::endl;
   while (true) {
     int long_option_index = -1;
     int c = getopt_long(argc, argv, options, long_options, &long_option_index);
@@ -174,6 +175,8 @@ int parse_command_line(int argc, char * argv[])
     }
   }
 
+  std::cout << "[tck-reach] command-line parsed: algorithm=" << algorithm << " certificate=" << certificate
+            << " search_order=" << search_order << " labels=" << labels << std::endl;
   return optind;
 }
 
@@ -186,14 +189,18 @@ int parse_command_line(int argc, char * argv[])
 */
 std::shared_ptr<tchecker::parsing::system_declaration_t> load_system_declaration(std::string const & filename)
 {
+  std::cout << "[tck-reach] loading system declaration from '" << (filename.empty() ? "<stdin>" : filename) << "'"
+            << std::endl;
   std::shared_ptr<tchecker::parsing::system_declaration_t> sysdecl{nullptr};
   try {
     sysdecl = tchecker::parsing::parse_system_declaration(filename);
     if (sysdecl == nullptr)
       throw std::runtime_error("nullptr system declaration");
+    std::cout << "[tck-reach] system declaration loaded: " << sysdecl->name() << std::endl;
   }
   catch (std::exception const & e) {
     std::cerr << tchecker::log_error << e.what() << std::endl;
+    std::cout << "[tck-reach] system declaration loading failed" << std::endl;
   }
   return sysdecl;
 }
@@ -286,8 +293,10 @@ void covreach(tchecker::parsing::system_declaration_t const & sysdecl)
   tchecker::algorithms::covreach::covering_t covering =
       (is_certificate_path(certificate) ? tchecker::algorithms::covreach::COVERING_LEAF_NODES
                                         : tchecker::algorithms::covreach::COVERING_FULL);
+  std::cout << "[tck-reach] covreach: invoking zg_covreach::run" << std::endl;
   auto && [stats, state_space] =
       tchecker::tck_reach::zg_covreach::run(sysdecl, labels, search_order, covering, block_size, table_size);
+  std::cout << "[tck-reach] covreach: run returned" << std::endl;
 
   // stats
   std::map<std::string, std::string> m;
@@ -360,6 +369,7 @@ void alu_covreach(std::shared_ptr<tchecker::parsing::system_declaration_t> const
 int main(int argc, char * argv[])
 {
   try {
+    std::cout << "[tck-reach] main entry" << std::endl;
     int optindex = parse_command_line(argc, argv);
 
     if (argc - optindex > 1) {
@@ -379,6 +389,7 @@ int main(int argc, char * argv[])
     }
 
     std::string input_file = (optindex == argc ? "" : argv[optindex]);
+    std::cout << "[tck-reach] selected input file: " << (input_file.empty() ? "<stdin>" : input_file) << std::endl;
 
     std::shared_ptr<tchecker::parsing::system_declaration_t> sysdecl{load_system_declaration(input_file)};
 
@@ -400,15 +411,19 @@ int main(int argc, char * argv[])
 
     switch (algorithm) {
     case ALGO_REACH:
+      std::cout << "[tck-reach] running reach" << std::endl;
       reach(*sysdecl);
       break;
     case ALGO_CONCUR19:
+      std::cout << "[tck-reach] running concur19" << std::endl;
       concur19(*sysdecl);
       break;
     case ALGO_COVREACH:
+      std::cout << "[tck-reach] running covreach" << std::endl;
       covreach(*sysdecl);
       break;
     case ALGO_ALU_COVREACH:
+      std::cout << "[tck-reach] running alu-covreach" << std::endl;
       alu_covreach(sysdecl);
       break;
     default:

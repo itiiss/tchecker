@@ -317,6 +317,7 @@ bool is_le(tchecker::dbm::db_t const * dbm1, tchecker::dbm::db_t const * dbm2, t
   // 参数：dbm1、dbm2 为已紧化的 DBM，dim 为矩阵维度；返回值：若 dbm1 表示的约束集合被 dbm2 包含则为 true。
   // 机制：逐个比对每个 xi-xj 条目，只要遇到一处 dbm1 约束更强（更大）即判定失败。
   // 作用：作为 zone 层包含性的基础原语，被仿真关系链路最终调用。
+  
   assert(dbm1 != nullptr);
   assert(dbm2 != nullptr);
   assert(dim >= 1);

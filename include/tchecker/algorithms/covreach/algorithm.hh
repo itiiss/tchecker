@@ -83,15 +83,20 @@ public:
 
     stats.set_start_time();
 
+    std::cout << "[covreach] expand_initial_nodes" << std::endl;
     expand_initial_nodes(ts, graph, nodes, stats);
+    std::cout << "[covreach] initial nodes count=" << nodes.size() << std::endl;
     for (node_sptr_t const & n : nodes)
       waiting->insert(n);
     nodes.clear();
 
     while (!waiting->empty()) {
+      if (waiting->empty())
+        break;
       node_sptr_t node = waiting->first();
       waiting->remove_first();
 
+      std::cout << "[covreach] visiting node" << std::endl;
       ++stats.visited_states();
 
       if (accepting(node, ts, labels)) {
@@ -100,6 +105,7 @@ public:
         break;
       }
 
+      std::cout << "[covreach] expanding successors" << std::endl;
       expand_next_nodes(node, ts, graph, nodes, stats);
 
       for (node_sptr_t const & next_node : nodes) {
@@ -140,7 +146,9 @@ public:
     std::vector<typename TS::sst_t> sst;
     typename GRAPH::node_sptr_t covering_node;
 
+    std::cout << "[covreach] ts.initial()" << std::endl;
     ts.initial(sst);
+    std::cout << "[covreach] ts.initial() produced " << sst.size() << " entries" << std::endl;
     for (auto && [status, s, t] : sst) {
       typename GRAPH::node_sptr_t n = graph.add_node(s);
       n->initial(true);
@@ -148,8 +156,10 @@ public:
         graph.remove_node(n);
         ++stats.covered_states();
       }
-      else
+      else {
+        graph.seed_state(n->state());
         initial_nodes.push_back(n);
+      }
     }
   }
 
@@ -178,16 +188,21 @@ public:
     typename GRAPH::node_sptr_t covering_node;
 
     ts.next(node->state_ptr(), sst);
+    std::cout << "[covreach] ts.next produced " << sst.size() << " successors" << std::endl;
     for (auto && [status, s, t] : sst) {
+      if (status != tchecker::STATE_OK)
+        continue;
       ++stats.visited_transitions();
       typename GRAPH::node_sptr_t next_node = graph.add_node(s);
       if (graph.is_covered(next_node, covering_node)) {
         // 已存在覆盖该后继的节点：记录一条 subsumption 边并丢弃被支配的后继
+        graph.record_transition(node->state(), next_node->state(), *t);
         graph.add_edge(node, covering_node, tchecker::graph::subsumption::EDGE_SUBSUMPTION, *t);
         graph.remove_node(next_node);
         ++stats.covered_states();
       }
       else {
+        graph.seed_state(next_node->state());
         graph.add_edge(node, next_node, tchecker::graph::subsumption::EDGE_ACTUAL, *t);
         next_nodes.push_back(next_node);
       }
